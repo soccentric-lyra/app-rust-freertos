@@ -117,18 +117,15 @@ pub fn reset() -> ! {
 /// RFBT-006 / RFSAFE-002: the only flash write in RFDEMO.  The record
 /// address is fixed by platform.h; nothing here can name another one.
 pub fn write_confirmed() -> bool {
-    match plat::confirmed_read() {
-        Some(current) => {
-            if confirmed_valid(&current) {
-                // HLT-005: an already confirmed slot does not write flash again.
-                return true;
-            }
-            if current.iter().any(|&b| b != 0xFF) {
-                // Append-only: a torn or foreign record is never overwritten.
-                return false;
-            }
+    if let Some(current) = plat::confirmed_read() {
+        if confirmed_valid(&current) {
+            // HLT-005: an already confirmed slot does not write flash again.
+            return true;
         }
-        None => {}
+        if current.iter().any(|&b| b != 0xFF) {
+            // Append-only: a torn or foreign record is never overwritten.
+            return false;
+        }
     }
 
     // C builds and programs the same 32-byte record as BOOT expects.
