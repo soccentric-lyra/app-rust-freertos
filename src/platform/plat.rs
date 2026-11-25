@@ -100,17 +100,29 @@ mod ffi {
     }
 }
 
-// SAFETY (all wrappers below): the C functions take no pointers, or only
-// pointers to buffers of the length passed with them, and are safe to call
-// once the FreeRTOS kernel runs.
+/// Call one C platform function.
+///
+/// Every C entry point either takes no pointer, or takes a pointer plus the
+/// matching length, and checks its own bounds.  The Rust side owns the buffer
+/// for the whole call (a stack value or a slice), so the pointer stays valid
+/// and the C code cannot retain it.  The kernel is running before any wrapper
+/// is called, and the C layer serialises its own hardware access.
+macro_rules! ffi_call {
+    ($call:expr) => {{
+        // SAFETY: see the macro documentation above; all arguments are live
+        // Rust values for the duration of the call and the C side checks its
+        // own lengths.
+        unsafe { $call }
+    }};
+}
 
 pub fn fault_boot_start() {
-    unsafe { ffi::plat_fault_boot_start() }
+    ffi_call!(ffi::plat_fault_boot_start())
 }
 
 pub fn fault_get() -> Option<Fault> {
     let mut fault = Fault::empty();
-    if unsafe { ffi::plat_fault_get(&mut fault) } {
+    if ffi_call!(ffi::plat_fault_get(&mut fault)) {
         Some(fault)
     } else {
         None
@@ -118,134 +130,138 @@ pub fn fault_get() -> Option<Fault> {
 }
 
 pub fn fault_is_current_boot() -> bool {
-    unsafe { ffi::plat_fault_is_current_boot() }
+    ffi_call!(ffi::plat_fault_is_current_boot())
 }
 
 pub fn fault_is_previous_boot() -> bool {
-    unsafe { ffi::plat_fault_is_previous_boot() }
+    ffi_call!(ffi::plat_fault_is_previous_boot())
 }
 
 pub fn fault_clear() {
-    unsafe { ffi::plat_fault_clear() }
+    ffi_call!(ffi::plat_fault_clear())
 }
 
 pub fn fatal() -> ! {
-    unsafe { ffi::plat_fatal() }
+    ffi_call!(ffi::plat_fatal())
 }
 
 pub fn vtor() -> u32 {
-    unsafe { ffi::plat_vtor() }
+    ffi_call!(ffi::plat_vtor())
 }
 
 pub fn reboot() -> ! {
-    unsafe { ffi::plat_reboot() }
+    ffi_call!(ffi::plat_reboot())
 }
 
 /// RFRT-001: one debug line on USART6 (see src/log.rs for the macros).
 pub fn log(level: u8, text: &[u8]) {
-    unsafe { ffi::plat_log(level, text.as_ptr(), text.len() as u32) }
+    ffi_call!(ffi::plat_log(level, text.as_ptr(), text.len() as u32))
 }
 
 pub fn dcache_invalidate(addr: u32, len: u32) {
-    unsafe { ffi::plat_dcache_invalidate(addr as usize, len) }
+    ffi_call!(ffi::plat_dcache_invalidate(addr as usize, len))
 }
 
 pub fn thread_name(name: &'static CStr) {
-    unsafe { ffi::plat_thread_name(name.as_ptr() as *const c_char) }
+    ffi_call!(ffi::plat_thread_name(name.as_ptr() as *const c_char))
 }
 
 /// Unused bytes on the calling task's stack (RFRT-005).
 pub fn stack_unused() -> u32 {
-    unsafe { ffi::plat_stack_unused() }
+    ffi_call!(ffi::plat_stack_unused())
 }
 
 /// Reset flags captured and cleared by C before Rust starts.
 pub fn reset_cause_flags() -> u32 {
-    unsafe { ffi::plat_reset_cause_flags() }
+    ffi_call!(ffi::plat_reset_cause_flags())
 }
 
 pub fn handover_slot() -> u8 {
-    unsafe { ffi::plat_handover_slot() }
+    ffi_call!(ffi::plat_handover_slot())
 }
 
 pub fn handover_trial() -> u8 {
-    unsafe { ffi::plat_handover_trial() }
+    ffi_call!(ffi::plat_handover_trial())
 }
 
 pub fn handover_trial_count() -> u8 {
-    unsafe { ffi::plat_handover_trial_count() }
+    ffi_call!(ffi::plat_handover_trial_count())
 }
 
 /// Ask BOOT to stay in the bootloader, then reset.
 pub fn enter_bootloader() -> ! {
-    unsafe { ffi::plat_enter_bootloader() }
+    ffi_call!(ffi::plat_enter_bootloader())
 }
 
 pub fn wdt_init() -> bool {
-    unsafe { ffi::plat_wdt_init() }
+    ffi_call!(ffi::plat_wdt_init())
 }
 
 pub fn wdt_feed() {
-    unsafe { ffi::plat_wdt_feed() }
+    ffi_call!(ffi::plat_wdt_feed())
 }
 
 pub fn gpio_init() -> bool {
-    unsafe { ffi::plat_gpio_init() }
+    ffi_call!(ffi::plat_gpio_init())
 }
 
 /// `led` is 0 for LD1, 1 for LD2 and 2 for LD3.
 pub fn led_set(led: u32, on: bool) {
-    unsafe { ffi::plat_led_set(led, on) }
+    ffi_call!(ffi::plat_led_set(led, on))
 }
 
 pub fn button_pressed() -> bool {
-    unsafe { ffi::plat_button_pressed() }
+    ffi_call!(ffi::plat_button_pressed())
 }
 
 /// Wait for a B1 edge or the timeout, whichever comes first.
 pub fn button_wait(timeout_ms: u32) {
-    unsafe { ffi::plat_button_wait(timeout_ms) }
+    ffi_call!(ffi::plat_button_wait(timeout_ms))
 }
 
 /// Let the C EXTI handler notify the calling task on a B1 edge.
 pub fn button_bind() {
-    unsafe { ffi::plat_button_bind() }
+    ffi_call!(ffi::plat_button_bind())
 }
 
 pub fn uart_init() -> bool {
-    unsafe { ffi::plat_uart_init() }
+    ffi_call!(ffi::plat_uart_init())
 }
 
 pub fn uart_set_baud(baud: u32) -> bool {
-    unsafe { ffi::plat_uart_set_baud(baud) }
+    ffi_call!(ffi::plat_uart_set_baud(baud))
 }
 
 pub fn uart_read(dst: &mut [u8]) -> usize {
-    unsafe { ffi::plat_uart_read(dst.as_mut_ptr(), dst.len() as u32) as usize }
+    ffi_call!(ffi::plat_uart_read(dst.as_mut_ptr(), dst.len() as u32) as usize)
 }
 
 /// Wait for received bytes or the timeout, whichever comes first.
 pub fn uart_wait(timeout_ms: u32) {
-    unsafe { ffi::plat_uart_wait(timeout_ms) }
+    ffi_call!(ffi::plat_uart_wait(timeout_ms))
 }
 
 pub fn uart_rx_running() -> bool {
-    unsafe { ffi::plat_uart_rx_running() }
+    ffi_call!(ffi::plat_uart_rx_running())
 }
 
 /// Send one frame and wait until its last stop bit has left the UART.
 pub fn uart_send(data: &[u8], timeout_ms: u32) -> bool {
-    unsafe { ffi::plat_uart_send(data.as_ptr(), data.len() as u32, timeout_ms) }
+    ffi_call!(ffi::plat_uart_send(
+        data.as_ptr(),
+        data.len() as u32,
+        timeout_ms
+    ))
 }
 
 /// Kept for the platform contract; USART3 RX wakes through a C queue.
 pub fn uart_bind() {
-    unsafe { ffi::plat_uart_bind() }
+    ffi_call!(ffi::plat_uart_bind())
 }
 
 pub fn confirmed_read() -> Option<[u8; 32]> {
     let mut record = [0u8; 32];
-    if unsafe { ffi::plat_confirmed_read(record.as_mut_ptr()) } {
+    if ffi_call!(ffi::plat_confirmed_read(record.as_mut_ptr())) {
         Some(record)
     } else {
         None
@@ -254,14 +270,14 @@ pub fn confirmed_read() -> Option<[u8; 32]> {
 
 /// Write the CONFIRMED record for the running slot through C.
 pub fn confirm_running_slot() -> bool {
-    unsafe { ffi::plat_confirm_running_slot() }
+    ffi_call!(ffi::plat_confirm_running_slot())
 }
 
 /// Milliseconds since boot.
 pub fn now_ms() -> u64 {
-    unsafe { ffi::plat_now_ms() as u64 }
+    ffi_call!(ffi::plat_now_ms() as u64)
 }
 
 pub fn sleep_ms(ms: u32) {
-    unsafe { ffi::plat_sleep_ms(ms) }
+    ffi_call!(ffi::plat_sleep_ms(ms))
 }

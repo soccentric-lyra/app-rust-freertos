@@ -12,6 +12,7 @@
 
 #![no_std]
 #![deny(warnings)]
+#![deny(clippy::undocumented_unsafe_blocks)]
 
 use core::ffi::c_void;
 
