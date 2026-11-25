@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    name: Build, lint, tests and image checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build base toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          file: docker/Dockerfile.base
+          tags: stm32-dev:latest
+          load: true
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,mode=max,scope=base
+
+      - name: Build Rust toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          file: docker/Dockerfile
+          build-args: |
+            BASE_IMAGE=stm32-dev:latest
+          tags: stm32-dev-rust-freertos:latest
+          load: true
+          cache-from: type=gha,scope=rust-freertos
+          cache-to: type=gha,mode=max,scope=rust-freertos
+
+      - name: Build firmware and enforce footprint
+        run: make build
+
+      - name: C static analysis (strict)
+        run: make lint-strict
+
+      - name: Rust clippy
+        run: make clippy
+
+      - name: Host protocol tests
+        run: make test-host
+
+      - name: FFI contract
+        run: make ffi-check
+
+      - name: Boot contract
+        run: make boot-contract
+
+      - name: Image header
+        run: make image-check
+
+      - name: rustfmt
+        run: scripts/docker-dev.sh run env CARGO_HOME=/work/.cargo-home cargo fmt --all -- --check
+
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-rust-freertos-image
+          path: |
+            build/rust-freertos-app.img
+            build/rust-freertos-app.elf
+            build/rust-freertos-app.map
+          if-no-files-found: error
+
+  security:
+    name: Advisories and licences
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cargo audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: cargo deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: check advisories bans licenses sources

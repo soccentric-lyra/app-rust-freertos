@@ -8,6 +8,28 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Host test crate for `src/protocol/hwlink/frame.rs`: COBS examples, block
+  boundaries, CRC corruption, reserved flags and size limits
+- `scripts/check_ffi.py` compares the Rust `extern "C"` declarations with
+  `platform/platform.h` and fails on a name or argument-count mismatch
+- `scripts/check_boot_contract.py` and `scripts/check_image.py`, shared by
+  Jenkins and GitHub Actions
+- `make clippy`, `make test-host`, `make ffi-check`, `make boot-contract` and
+  `make image-check` quality-gate targets
+- `docs/architecture.md`: C/Rust layers, FFI ownership, memory map, boot flow,
+  GDB walkthrough and a module-by-module migration guide
+- `cargo audit` and `cargo deny` jobs plus a `deny.toml` policy
+- GitHub Actions workflow with the same gates
+
+### Changed
+
+- The FFI wrappers now go through one documented `ffi_call!` macro and
+  `clippy::undocumented_unsafe_blocks` is denied in `src/lib.rs`
+- The Jenkins boot-contract and image stages use the shared scripts instead
+  of inline copies
+
 ## [1.0.0] - 2026-11-19
 
 ### Added

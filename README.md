@@ -1,5 +1,7 @@
 # app-rust-freertos
 
+[![CI](https://github.com/soccentric-stm32/app-rust-freertos/actions/workflows/ci.yml/badge.svg)](https://github.com/soccentric-stm32/app-rust-freertos/actions/workflows/ci.yml)
+
 The NUCLEO-F767ZI demo application written in Rust (`no_std`, no allocator)
 running directly on the FreeRTOS kernel. It runs under the A/B bootloader from
 either slot and does the same job as the C FreeRTOS demo: LED patterns, the
@@ -99,7 +101,7 @@ Makefile            build, lint, fmt, flash, debug and serial targets
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md) — layers, boot flow and where code goes
+- [docs/architecture.md](docs/architecture.md) — C/Rust layers, FFI boundary, ownership, boot flow and the migration path
 - [protocol/README.md](protocol/README.md) — HWLINK schema and framing
 - [docker/README.md](docker/README.md) — build container and toolchain
 
@@ -128,9 +130,11 @@ Rust staticlib and links it into `build/rust-freertos-app.elf`. The build also
 writes `.bin`, `.hex`, `.map` and the bootloader `.img`, and checks the 128 KB
 flash / 64 KB RAM budget.
 
-Useful targets: `make lint` (clang-tidy over the C sources), `make fmt`
-(cargo fmt in the container), `make size`, `make probe`, `make gdbserver`,
-`make debug` and `make erase-all`.
+Useful targets: `make lint` (clang-tidy over the C sources), `make clippy`
+(Rust), `make test-host` (HWLINK tests on the host), `make ffi-check`,
+`make boot-contract`, `make image-check`, `make fmt` (cargo fmt in the
+container), `make size`, `make probe`, `make gdbserver`, `make debug` and
+`make erase-all`.
 
 ## Related projects
 
