@@ -15,6 +15,11 @@
 #   make rebuild        clean, then build
 #   make lint           clang-tidy static analysis of the C sources
 #   make lint-strict    clang-tidy, failing on any finding
+#   make clippy         cargo clippy -D warnings for the Rust side
+#   make test-host      run the HWLINK protocol tests on the host
+#   make ffi-check      compare Rust extern declarations with platform.h
+#   make boot-contract  check the BOOT layout constants (host Python)
+#   make image-check    validate the BOOT image header
 #   make fmt            cargo fmt in the container
 #   make flash          build, then upload the image through BOOT (bootctl)
 #   make erase-all      erase the whole flash (asks for confirmation)
@@ -84,11 +89,13 @@ PORT       ?=
 # Git Bash resolves python3 to the Microsoft Store stub, which exits non-zero;
 # Windows has the interpreter as python.
 PYTHON     ?= $(if $(filter Windows_NT,$(OS)),python,python3)
+VERSION    := $(shell ci/version.sh)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all build configure clean rebuild lint lint-strict fmt flash erase-all \
-        reset debug gdbserver serial probe size image help
+.PHONY: all build configure clean rebuild lint lint-strict clippy test-host \
+        ffi-check boot-contract image-check fmt flash erase-all reset debug \
+        gdbserver serial probe size image help
 
 all: build
 
@@ -120,6 +127,21 @@ lint-strict:
 	$(DEV) run cmake -S /work -B /work/$(BUILD_DIR) -G Ninja \
 		-DAPP_LINT_STRICT=ON
 	$(DEV) run cmake --build /work/$(BUILD_DIR) --target clang-tidy
+
+clippy:
+	$(CARGO) clippy --release -- -D warnings
+
+test-host:
+	scripts/test-host.sh
+
+ffi-check:
+	$(PYTHON) scripts/check_ffi.py
+
+boot-contract:
+	$(PYTHON) scripts/check_boot_contract.py
+
+image-check:
+	$(PYTHON) scripts/check_image.py $(IMAGE) --version $(VERSION)
 
 fmt:
 	$(CARGO) fmt --all

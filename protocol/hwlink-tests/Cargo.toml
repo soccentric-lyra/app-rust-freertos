@@ -1,0 +1,12 @@
+# Host-side test harness for the HWLINK framing module.
+#
+# The firmware is a static library for the target, so this crate includes the
+# same src/protocol/hwlink/frame.rs and runs its #[cfg(test)] suite on the host.
+[package]
+name = "hwlink-frame-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"

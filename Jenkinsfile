@@ -93,6 +93,13 @@ pipeline {
             }
         }
 
+        stage('Clippy') {
+            when { expression { return params.RUN_LINT } }
+            steps {
+                sh 'make clippy'
+            }
+        }
+
         stage('Format') {
             when { expression { return params.CHECK_FORMAT } }
             steps {
@@ -105,40 +112,19 @@ pipeline {
 
         stage('Boot contract') {
             steps {
-                sh '''
-                    python3 - <<'PY'
-from pathlib import Path
+                sh 'python3 scripts/check_boot_contract.py'
+            }
+        }
 
-# Values shared with bootloader (LAY-001..LAY-005, HND-003,
-# Appendix B). If this stage fails, the application and BOOT have drifted.
-expected = {
-    "APP_SLOT_BASE": 0x0800C000,
-    "APP_SLOT_SIZE": 0x000F4000,
-    "APP_META_A_ADDR": 0x08008000,
-    "APP_META_B_ADDR": 0x08108000,
-    "APP_META_VERIFIED_OFFSET": 0x100,
-    "APP_META_ACTIVATED_OFFSET": 0x120,
-    "APP_META_CONFIRMED_OFFSET": 0x140,
-    "APP_META_REJECTED_OFFSET": 0x160,
-}
+        stage('FFI contract') {
+            steps {
+                sh 'python3 scripts/check_ffi.py'
+            }
+        }
 
-defines = {}
-for line in Path("platform/boot/boot_contract.h").read_text(encoding="utf-8").splitlines():
-    parts = line.split()
-    if len(parts) >= 3 and parts[0] == "#define":
-        defines[parts[1]] = parts[2]
-
-for name, want in expected.items():
-    if name not in defines:
-        raise SystemExit(f"boot contract: {name} is missing from platform/boot/boot_contract.h")
-    raw = defines[name].rstrip("ULul").rstrip("ULul")
-    got = int(raw, 16)
-    if got != want:
-        raise SystemExit(f"boot contract: {name} is 0x{got:08X}, expected 0x{want:08X}")
-
-print("boot contract: slot, metadata and record offsets match the BOOT layout")
-PY
-                '''
+        stage('Host tests') {
+            steps {
+                sh 'make test-host'
             }
         }
 
@@ -146,39 +132,7 @@ PY
             steps {
                 sh '''
                     make size
-                    python3 - <<'PY'
-import struct
-import zlib
-from pathlib import Path
-
-version = {}
-for line in Path("VERSION").read_text(encoding="utf-8").splitlines():
-    if "=" in line:
-        key, _, value = line.partition("=")
-        version[key.strip()] = value.strip()
-want = ((int(version["VERSION_MAJOR"]) << 24) |
-        (int(version["VERSION_MINOR"]) << 16) |
-        int(version["PATCHLEVEL"]))
-
-path = Path("build/rust-freertos-app.img")
-data = path.read_bytes()
-header = struct.unpack_from("<IHHIIIIIII", data, 0)
-magic, hver, hsize, itype, ver, isize, icrc, load, entry, _ts = header
-assert magic == 0x48574249, "bad image magic"
-assert hver == 1, f"unexpected header version {hver}"
-assert hsize == 256, f"unexpected header size {hsize}"
-assert itype == 1, f"unexpected image type {itype}"
-assert ver == want, f"image version 0x{ver:08X} does not match VERSION 0x{want:08X}"
-assert load == 0x0800C000, f"image loads at 0x{load:08X}, expected 0x0800C000"
-assert len(data) == hsize + isize, "image size does not match the header"
-assert zlib.crc32(data[hsize:]) & 0xFFFFFFFF == icrc, "image CRC32 mismatch"
-sp = struct.unpack_from("<I", data, hsize)[0]
-assert 0x20000000 < sp <= 0x20080000, "initial stack pointer is outside internal RAM"
-entry_ok = entry & 1 and 0x0800C000 <= (entry & ~1) < 0x0800C000 + 0x000F4000
-assert entry_ok, "reset vector is outside the slot"
-print(f"image: {path} v{(ver >> 24) & 0xFF}.{(ver >> 16) & 0xFF}.{ver & 0xFF} "
-      f"({isize} bytes payload, entry 0x{entry:08X})")
-PY
+                    python3 scripts/check_image.py build/rust-freertos-app.img --version "$(ci/version.sh)"
                 '''
             }
         }
